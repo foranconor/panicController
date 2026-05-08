@@ -1,0 +1,19 @@
+# Example HAL wiring for the panic controller.
+# Add these lines to your LinuxCNC machine's HAL config.
+
+# Load the component — -W waits until it is ready before continuing
+loadusr -W python3 /path/to/safety_mcu.py
+
+# Wire estop-ok into LinuxCNC's external estop input.
+# When the ESP32 is not in OK state this goes low and forces LinuxCNC into estop.
+# When the physical ack button is pressed and the controller clears, the Python
+# component automatically commands STATE_ESTOP_RESET + STATE_ON — the operator
+# only needs to press cycle start.
+net safety-estop  safety-mcu.estop-ok  =>  iocontrol.0.emc-enable-in
+
+# Optional: expose telemetry pins to the HAL for display in the GUI
+# net safety-loop-avg   safety-mcu.loop-avg-us
+# net safety-loop-max   safety-mcu.loop-max-us
+# net safety-panics     safety-mcu.panic-count
+# net safety-glitches   safety-mcu.glitch-count
+# net safety-connected  safety-mcu.connected

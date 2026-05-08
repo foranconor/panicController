@@ -1,0 +1,14 @@
+# Flash
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_PARTITION_TABLE_SINGLE_APP=y
+
+# PSRAM not needed — telemetry is sent over USB CDC to LinuxCNC
+# CONFIG_SPIRAM=y
+
+# Console on UART so idf.py monitor works on the COM port
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+
+# USB CDC for protocol (native USB OTG, not the console)
+CONFIG_TINYUSB_CDC_ENABLED=y
+# PANIC_INFO lines can reach ~600 bytes — default 256-byte TX buffer truncates them
+CONFIG_TINYUSB_CDC_TX_BUFSIZE=2048
