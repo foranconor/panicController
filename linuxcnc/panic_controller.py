@@ -34,7 +34,7 @@ DEVICE              = "/dev/ttyACM0"
 BAUD                = 115200
 HEARTBEAT_TIMEOUT_S = 5.0
 RECONNECT_DELAY_S   = 1.0
-EVENT_LOG           = "/home/linuxcnc/panic_events.jsonl"
+EVENT_LOG           = "/home/conor/linuxcnc/panic_events.jsonl"
 
 logging.basicConfig(
     level=logging.INFO,
