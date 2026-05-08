@@ -1,0 +1,40 @@
+LINUXCNC - 2.9.8
+Machine configuration directory is '/home/conor/linuxcnc/configs/sim.axis'
+Machine configuration file is 'axis_mm.ini'
+Starting LinuxCNC...
+linuxcnc TPMOD=tpmod HOMEMOD=homemod EMCMOT=motmod
+Note: Using POSIX realtime
+Found file(lib): /usr/share/linuxcnc/hallib/core_sim.hal
+Found file(lib): /usr/share/linuxcnc/hallib/sim_spindle_encoder.hal
+Found file(lib): /usr/share/linuxcnc/hallib/axis_manualtoolchange.hal
+Found file(lib): /usr/share/linuxcnc/hallib/simulated_home.hal
+Found file(REL): ./cooling.hal
+Found file(REL): ./panic_controller.hal
+2026-05-08 15:30:34,897 INFO safety_mcu: safety_mcu running — heartbeat timeout 5.0s
+2026-05-08 15:30:34,899 INFO safety_mcu: connected to LinuxCNC task
+2026-05-08 15:30:34,899 INFO safety_mcu: serial open: /dev/ttyACM0
+2026-05-08 15:30:34,906 INFO safety_mcu: TRANS t=612s PANIC → CLEAR
+2026-05-08 15:30:34,909 INFO safety_mcu: EVENT t=612s [safety] Fault cleared. Press the ack button when you're ready to resume.
+2026-05-08 15:30:34,912 INFO safety_mcu: CLEARED t=612s USB/CDC0: Lost connection to LinuxCNC
+2026-05-08 15:30:34,914 INFO safety_mcu: EVENT t=612s [usb] LinuxCNC connection established.
+Waiting for component 'python3' to become ready.
+While waiting for 'python3', component 'panic-controller' loaded.
+Did you specify the correct name via 'loadusr -Wn'?...................2026-05-08 15:30:38,685 INFO safety_mcu: TRANS t=616s CLEAR → READY
+2026-05-08 15:30:38,687 INFO safety_mcu: EVENT t=616s [safety] Ack received ��� confirming inputs stable for 150 ms.
+..2026-05-08 15:30:38,845 INFO safety_mcu: TRANS t=616s READY → OK
+2026-05-08 15:30:38,847 INFO safety_mcu: EVENT t=616s [safety] All clear. Machine enabled.
+................................................................................2026-05-08 15:30:46,915 INFO safety_mcu: TRANS t=624s OK → PANIC
+2026-05-08 15:30:46,926 WARNING safety_mcu: FAULT t=624s [OK→PANIC] GPIO/GPIO5: E-stop pressed at panel
+.........2026-05-08 15:30:47,855 INFO safety_mcu: TRANS t=625s PANIC → CLEAR
+2026-05-08 15:30:47,858 INFO safety_mcu: EVENT t=625s [safety] Fault cleared. Press the ack button when you're ready to resume.
+2026-05-08 15:30:47,860 INFO safety_mcu: CLEARED t=625s GPIO/GPIO5: E-stop pressed at panel
+...................2026-05-08 15:30:49,755 INFO safety_mcu: TRANS t=627s CLEAR → READY
+2026-05-08 15:30:49,757 INFO safety_mcu: EVENT t=627s [safety] Ack received ��� confirming inputs stable for 150 ms.
+.2026-05-08 15:30:49,914 INFO safety_mcu: TRANS t=627s READY → OK
+2026-05-08 15:30:49,916 INFO safety_mcu: EVENT t=627s [safety] All clear. Machine enabled.
+.........................................................^C2026-05-08 15:30:55,605 INFO safety_mcu: safety_mcu stopped
+
+./panic_controller.hal:12: python3 exited without becoming ready
+Shutting down and cleaning up LinuxCNC...
+Note: Using POSIX realtime
+
