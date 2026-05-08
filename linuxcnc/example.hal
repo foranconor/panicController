@@ -1,19 +1,16 @@
-# Example HAL wiring for the panic controller.
-# Add these lines to your LinuxCNC machine's HAL config.
+# HAL wiring for the panic controller safety MCU component.
+# Add these lines to your machine's HAL config file.
+#
+# The component:
+#   - reads OK/PANIC from the ESP32 over USB CDC (/dev/ttyACM0)
+#   - drives estop-ok LOW on any fault or lost connection
+#   - sends ESTOP to the ESP32 when LinuxCNC enters estop
+#   - auto-resets LinuxCNC estop when the physical ack button is pressed
+#     (operator only needs to press cycle start to resume)
 
-# Load the component — -W waits until it is ready before continuing
-loadusr -W python3 /path/to/safety_mcu.py
+# Load the component — -W waits until ready before HAL continues
+loadusr -W python3 /home/linuxcnc/configs/your-machine/safety_mcu.py
 
-# Wire estop-ok into LinuxCNC's external estop input.
-# When the ESP32 is not in OK state this goes low and forces LinuxCNC into estop.
-# When the physical ack button is pressed and the controller clears, the Python
-# component automatically commands STATE_ESTOP_RESET + STATE_ON — the operator
-# only needs to press cycle start.
+# Drive LinuxCNC's external estop input from the controller state.
+# When estop-ok is LOW, LinuxCNC stays in estop regardless of F1.
 net safety-estop  safety-mcu.estop-ok  =>  iocontrol.0.emc-enable-in
-
-# Optional: expose telemetry pins to the HAL for display in the GUI
-# net safety-loop-avg   safety-mcu.loop-avg-us
-# net safety-loop-max   safety-mcu.loop-max-us
-# net safety-panics     safety-mcu.panic-count
-# net safety-glitches   safety-mcu.glitch-count
-# net safety-connected  safety-mcu.connected
