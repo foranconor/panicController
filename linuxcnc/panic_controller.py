@@ -38,7 +38,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
-log = logging.getLogger("safety_mcu")
+log = logging.getLogger("panic_controller")
 
 # ---------------------------------------------------------------------------
 # HAL component

@@ -8,8 +8,8 @@
 #   - auto-resets LinuxCNC estop when the physical ack button is pressed
 #     (operator only needs to press cycle start to resume)
 
-# Load the component — -W waits until ready before HAL continues
-loadusr -W python3 /home/linuxcnc/configs/your-machine/panic_controller.py
+# Load the component — -Wn specifies the HAL component name to wait for
+loadusr -Wn panic-controller python3 /home/linuxcnc/configs/your-machine/panic_controller.py
 
 # Drive LinuxCNC's external estop input from the controller state.
 # When estop-ok is LOW, LinuxCNC stays in estop regardless of F1.
