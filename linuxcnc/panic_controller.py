@@ -55,6 +55,7 @@ _lock           = threading.Lock()
 _last_message_t = 0.0
 _estop_ok       = False
 _send_queue     = queue.SimpleQueue()
+_msg_queue      = queue.SimpleQueue()  # ('error'|'text', str) — drained by main loop
 
 
 def _set_estop(ok):
@@ -88,12 +89,14 @@ def _parse(line):
     msg = parts[0]
 
     if msg == "PANIC_INFO" and len(parts) == 8:
-        _, uptime, from_state, src_type, src_id, title, explanation, _ = parts
+        _, uptime, from_state, src_type, src_id, title, explanation, fix = parts
         log.warning("FAULT t=%ss [%s→PANIC] %s/%s: %s", uptime, from_state, src_type, src_id, title)
+        _msg_queue.put(("error", f"FAULT [{src_type}/{src_id}]: {title}\n\n{fix}"))
 
     elif msg == "PANIC_CLEARED" and len(parts) == 5:
         _, uptime, src_type, src_id, title = parts
         log.info("CLEARED t=%ss %s/%s: %s", uptime, src_type, src_id, title)
+        _msg_queue.put(("text", f"Fault cleared: {title}"))
 
     elif msg == "TRANS" and len(parts) == 4:
         _, uptime, from_state, to_state = parts
@@ -199,6 +202,22 @@ def main():
                     log.warning("linuxcnc status error: %s — will reconnect", exc)
                     lc  = None
                     cmd = None
+
+            # Forward queued operator messages to AXIS (dropped if cmd not ready)
+            if cmd is not None:
+                while not _msg_queue.empty():
+                    try:
+                        kind, text = _msg_queue.get_nowait()
+                        if kind == "error":
+                            cmd.error_msg(text)
+                        else:
+                            cmd.text_msg(text)
+                    except Exception:
+                        pass
+            else:
+                # Discard stale messages — operator isn't connected anyway
+                while not _msg_queue.empty():
+                    _msg_queue.get_nowait()
 
             prev_estop_ok = ok
             time.sleep(0.05)

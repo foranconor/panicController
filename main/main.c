@@ -98,6 +98,10 @@ void app_main(void) {
       }
 
       prev_safety = safety;
+
+      /* Send status immediately on any transition — don't wait for the next
+       * heartbeat. hb_prev is updated so the heartbeat won't double-send. */
+      send_status(safety, &hb_prev);
     }
 
     /* Drain faults that became active or cleared this tick. Both run every
