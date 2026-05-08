@@ -10,6 +10,7 @@ import os
 import sys
 import time
 
+from rich.markup import escape as markup_escape
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -39,6 +40,7 @@ class PanicLogApp(App):
     }
     #detail {
         padding: 1 2;
+        height: auto;
     }
     """
 
@@ -140,26 +142,26 @@ class PanicLogApp(App):
         detail = self.query_one("#detail", Static)
 
         if level == "PANIC":
-            explanation = ev.get("explanation", "")
-            fix_lines   = [s.strip() for s in ev.get("fix", "").split("\n") if s.strip()]
+            explanation = markup_escape(ev.get("explanation", ""))
+            fix_lines   = [markup_escape(s.strip()) for s in ev.get("fix", "").split("\n") if s.strip()]
             fix_block   = "\n".join(f"  {line}" for line in fix_lines)
             markup = (
-                f"[bold red]{title}[/bold red]  [dim]{src}  {ts}[/dim]\n\n"
+                f"[bold red]{markup_escape(title)}[/bold red]  [dim]{src}  {ts}[/dim]\n\n"
                 f"{explanation}\n\n"
                 f"[bold]Fix:[/bold]\n{fix_block}"
             )
 
         elif level == "CLEARED":
-            markup = f"[bold green]Cleared:[/bold green] {title}  [dim]{src}  {ts}[/dim]"
+            markup = f"[bold green]Cleared:[/bold green] {markup_escape(title)}  [dim]{src}  {ts}[/dim]"
 
         elif level == "CONNECT":
-            markup = f"[bold cyan]Connected:[/bold cyan] {title}  [dim]{ts}[/dim]"
+            markup = f"[bold cyan]Connected:[/bold cyan] {markup_escape(title)}  [dim]{ts}[/dim]"
 
         elif level == "DISCONNECT":
-            markup = f"[bold yellow]Disconnected:[/bold yellow] {title}  [dim]{ts}[/dim]"
+            markup = f"[bold yellow]Disconnected:[/bold yellow] {markup_escape(title)}  [dim]{ts}[/dim]"
 
         else:
-            markup = title
+            markup = markup_escape(title)
 
         detail.update(markup)
 

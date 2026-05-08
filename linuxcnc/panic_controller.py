@@ -105,7 +105,7 @@ def _parse(line):
         _log_event("PANIC", title,
                    src=f"{src_type}/{src_id}",
                    explanation=explanation,
-                   fix=fix)
+                   fix=fix.replace("\\n", "\n"))
 
     elif msg == "PANIC_CLEARED" and len(parts) == 5:
         _, uptime, src_type, src_id, title = parts

@@ -16,11 +16,28 @@
 
 static uint32_t s_panic_count = 0;
 
+/* Copy src to dst, replacing each newline with the two-character sequence \n
+ * so the CSV line stays on a single line for readline(). */
+static void escape_newlines(const char *src, char *dst, size_t dst_size) {
+    size_t j = 0;
+    for (size_t i = 0; src[i] && j + 2 < dst_size; i++) {
+        if (src[i] == '\n') {
+            dst[j++] = '\\';
+            dst[j++] = 'n';
+        } else {
+            dst[j++] = src[i];
+        }
+    }
+    dst[j] = '\0';
+}
+
 void telemetry_panic(uint32_t uptime_s, const panic_entry_t *entry,
                      const char *state_before)
 {
+    char fix_esc[512];
     char buf[768];
     s_panic_count++;
+    escape_newlines(entry->fix, fix_esc, sizeof(fix_esc));
     int written = snprintf(buf, sizeof(buf), "PANIC_INFO,%lu,%s,%s,%s,\"%s\",\"%s\",\"%s\"\n",
              (unsigned long)uptime_s,
              state_before,
@@ -28,9 +45,8 @@ void telemetry_panic(uint32_t uptime_s, const panic_entry_t *entry,
              entry->source_id,
              entry->title,
              entry->explanation,
-             entry->fix);
+             fix_esc);
     if (written >= (int)sizeof(buf)) {
-        /* Truncated — patch a valid line ending so the CSV parser isn't corrupted */
         buf[sizeof(buf) - 3] = '"';
         buf[sizeof(buf) - 2] = '\n';
         buf[sizeof(buf) - 1] = '\0';
