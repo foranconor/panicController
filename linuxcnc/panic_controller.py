@@ -6,14 +6,14 @@ Reads USB CDC serial from the ESP32, drives the estop-ok HAL pin, and
 bridges the LinuxCNC software estop state back to the physical controller.
 
 Load in your HAL config:
-    loadusr -W python3 /path/to/safety_mcu.py
+    loadusr -W python3 /path/to/panic_controller.py
 
 Wire the estop pin:
-    net safety-estop  safety-mcu.estop-ok  =>  iocontrol.0.emc-enable-in
+    net safety-estop  panic-controller.estop-ok  =>  iocontrol.0.emc-enable-in
 
 HAL pins:
-    safety-mcu.estop-ok   BIT OUT — HIGH when ESP32 is in OK state
-    safety-mcu.connected  BIT OUT — HIGH when serial link is up
+    panic-controller.estop-ok   BIT OUT — HIGH when ESP32 is in OK state
+    panic-controller.connected  BIT OUT — HIGH when serial link is up
 """
 
 import csv
@@ -43,7 +43,7 @@ log = logging.getLogger("safety_mcu")
 # ---------------------------------------------------------------------------
 # HAL component
 
-h = hal.component("safety-mcu")
+h = hal.component("panic-controller")
 h.newpin("estop-ok",  hal.HAL_BIT, hal.HAL_OUT)
 h.newpin("connected", hal.HAL_BIT, hal.HAL_OUT)
 h.ready()
@@ -140,16 +140,15 @@ def _reader():
 # Main loop
 
 def main():
-    lc  = linuxcnc.stat()
-    cmd = linuxcnc.command()
-
     t = threading.Thread(target=_reader, daemon=True, name="serial-reader")
     t.start()
 
     log.info("safety_mcu running — heartbeat timeout %.1fs", HEARTBEAT_TIMEOUT_S)
 
-    prev_estop_ok  = False
-    prev_lc_state  = None
+    lc  = None
+    cmd = None
+    prev_estop_ok = False
+    prev_lc_state = None
 
     try:
         while True:
@@ -164,29 +163,42 @@ def main():
 
             h["estop-ok"] = ok
 
-            try:
-                lc.poll()
-                lc_state = lc.task_state
+            # Connect to LinuxCNC task lazily — it may not be up yet at startup
+            if lc is None:
+                try:
+                    lc  = linuxcnc.stat()
+                    cmd = linuxcnc.command()
+                    log.info("connected to LinuxCNC task")
+                except Exception:
+                    lc  = None
+                    cmd = None
 
-                # LinuxCNC entered estop — tell the controller
-                if (lc_state == linuxcnc.STATE_ESTOP
-                        and prev_lc_state != linuxcnc.STATE_ESTOP):
-                    log.info("LinuxCNC estop — sending ESTOP to controller")
-                    _send_queue.put("ESTOP\n")
+            if lc is not None:
+                try:
+                    lc.poll()
+                    lc_state = lc.task_state
 
-                # estop-ok rising edge — physical ack button was pressed.
-                # Auto-reset LinuxCNC estop so operator only needs cycle start.
-                if ok and not prev_estop_ok:
-                    if lc_state == linuxcnc.STATE_ESTOP:
-                        log.info("controller cleared — resetting LinuxCNC estop")
-                        cmd.state(linuxcnc.STATE_ESTOP_RESET)
-                        time.sleep(0.05)
-                        cmd.state(linuxcnc.STATE_ON)
+                    # LinuxCNC entered estop — tell the controller
+                    if (lc_state == linuxcnc.STATE_ESTOP
+                            and prev_lc_state != linuxcnc.STATE_ESTOP):
+                        log.info("LinuxCNC estop — sending ESTOP to controller")
+                        _send_queue.put("ESTOP\n")
 
-                prev_lc_state = lc_state
+                    # estop-ok rising edge — physical ack button was pressed.
+                    # Auto-reset LinuxCNC estop so operator only needs cycle start.
+                    if ok and not prev_estop_ok:
+                        if lc_state == linuxcnc.STATE_ESTOP:
+                            log.info("controller cleared — resetting LinuxCNC estop")
+                            cmd.state(linuxcnc.STATE_ESTOP_RESET)
+                            time.sleep(0.05)
+                            cmd.state(linuxcnc.STATE_ON)
 
-            except Exception as exc:
-                log.warning("linuxcnc status error: %s", exc)
+                    prev_lc_state = lc_state
+
+                except Exception as exc:
+                    log.warning("linuxcnc status error: %s — will reconnect", exc)
+                    lc  = None
+                    cmd = None
 
             prev_estop_ok = ok
             time.sleep(0.05)

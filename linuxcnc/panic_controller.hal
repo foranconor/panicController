@@ -9,8 +9,8 @@
 #     (operator only needs to press cycle start to resume)
 
 # Load the component — -W waits until ready before HAL continues
-loadusr -W python3 /home/linuxcnc/configs/your-machine/safety_mcu.py
+loadusr -W python3 /home/linuxcnc/configs/your-machine/panic_controller.py
 
 # Drive LinuxCNC's external estop input from the controller state.
 # When estop-ok is LOW, LinuxCNC stays in estop regardless of F1.
-net safety-estop  safety-mcu.estop-ok  =>  iocontrol.0.emc-enable-in
+net safety-estop  panic-controller.estop-ok  =>  iocontrol.0.emc-enable-in
