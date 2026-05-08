@@ -18,6 +18,7 @@ HAL pins:
 
 import csv
 import io
+import json
 import logging
 import queue
 import threading
@@ -33,6 +34,7 @@ DEVICE              = "/dev/ttyACM0"
 BAUD                = 115200
 HEARTBEAT_TIMEOUT_S = 5.0
 RECONNECT_DELAY_S   = 1.0
+EVENT_LOG           = "/home/linuxcnc/fault_events.jsonl"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,13 +57,22 @@ _lock           = threading.Lock()
 _last_message_t = 0.0
 _estop_ok       = False
 _send_queue     = queue.SimpleQueue()
-_msg_queue      = queue.SimpleQueue()  # ('error'|'text', str) — drained by main loop
 
 
 def _set_estop(ok):
     global _estop_ok
     with _lock:
         _estop_ok = ok
+
+
+def _log_event(level, title, **extra):
+    record = {"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "level": level, "title": title}
+    record.update(extra)
+    try:
+        with open(EVENT_LOG, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except OSError as exc:
+        log.warning("could not write event log: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -90,17 +101,20 @@ def _parse(line):
 
     if msg == "PANIC_INFO" and len(parts) == 8:
         _, uptime, from_state, src_type, src_id, title, explanation, fix = parts
-        log.warning("FAULT t=%ss [%s→PANIC] %s/%s: %s", uptime, from_state, src_type, src_id, title)
-        _msg_queue.put(("error", f"FAULT [{src_type}/{src_id}]: {title}\n\n{fix}"))
+        log.warning("PANIC t=%ss [%s->PANIC] %s/%s: %s", uptime, from_state, src_type, src_id, title)
+        _log_event("PANIC", title,
+                   src=f"{src_type}/{src_id}",
+                   explanation=explanation,
+                   fix=fix)
 
     elif msg == "PANIC_CLEARED" and len(parts) == 5:
         _, uptime, src_type, src_id, title = parts
         log.info("CLEARED t=%ss %s/%s: %s", uptime, src_type, src_id, title)
-        _msg_queue.put(("text", f"Fault cleared: {title}"))
+        _log_event("CLEARED", title, src=f"{src_type}/{src_id}")
 
     elif msg == "TRANS" and len(parts) == 4:
         _, uptime, from_state, to_state = parts
-        log.info("TRANS t=%ss %s → %s", uptime, from_state, to_state)
+        log.info("TRANS t=%ss %s -> %s", uptime, from_state, to_state)
 
     elif msg == "EVENT" and len(parts) == 4:
         _, uptime, source, description = parts
@@ -121,6 +135,7 @@ def _reader():
         try:
             with serial.Serial(DEVICE, BAUD, timeout=0.1) as port:
                 log.info("serial open: %s", DEVICE)
+                _log_event("CONNECT", f"serial link up ({DEVICE})", src=DEVICE)
                 h["connected"] = True
                 with _lock:
                     _last_message_t = time.monotonic()
@@ -134,6 +149,7 @@ def _reader():
                         port.write(_send_queue.get_nowait().encode())
         except serial.SerialException as exc:
             log.warning("serial error: %s — retrying in %ss", exc, RECONNECT_DELAY_S)
+            _log_event("DISCONNECT", "serial link lost — retrying", src=DEVICE)
             h["connected"] = False
             _set_estop(False)
             time.sleep(RECONNECT_DELAY_S)
@@ -202,22 +218,6 @@ def main():
                     log.warning("linuxcnc status error: %s — will reconnect", exc)
                     lc  = None
                     cmd = None
-
-            # Forward queued operator messages to AXIS (dropped if cmd not ready)
-            if cmd is not None:
-                while not _msg_queue.empty():
-                    try:
-                        kind, text = _msg_queue.get_nowait()
-                        if kind == "error":
-                            cmd.error_msg(text)
-                        else:
-                            cmd.text_msg(text)
-                    except Exception:
-                        pass
-            else:
-                # Discard stale messages — operator isn't connected anyway
-                while not _msg_queue.empty():
-                    _msg_queue.get_nowait()
 
             prev_estop_ok = ok
             time.sleep(0.05)
