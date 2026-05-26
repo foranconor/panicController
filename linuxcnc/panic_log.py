@@ -17,7 +17,7 @@ from textual.binding import Binding
 from textual.containers import ScrollableContainer
 from textual.widgets import DataTable, Footer, Header, Static
 
-LOG_PATH = "/home/linuxcnc/fault_events.jsonl"
+LOG_PATH = "/home/conor/linuxcnc/panic_events.jsonl"
 
 LEVEL_STYLE = {
     "PANIC":      "bold red",
