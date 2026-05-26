@@ -13,4 +13,5 @@ loadusr -Wn panic-controller python3 /home/conor/linuxcnc/configs/myCoolMachine/
 
 # Drive LinuxCNC's external estop input from the controller state.
 # When estop-ok is LOW, LinuxCNC stays in estop regardless of F1.
+unlinkp iocontrol.0.emc-enable-in
 net safety-estop  panic-controller.estop-ok  =>  iocontrol.0.emc-enable-in
