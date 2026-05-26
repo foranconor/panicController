@@ -4,6 +4,7 @@ idf_component_register(
         "led.c"
         "usb_serial.c"
         "safety.c"
+        "relay.c"
         "panics.c"
         "telemetry.c"
     INCLUDE_DIRS "."

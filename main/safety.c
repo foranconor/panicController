@@ -1,5 +1,6 @@
 #include "safety.h"
 #include "panics.h"
+#include "relay.h"
 
 #include "driver/gpio.h"
 
@@ -13,8 +14,8 @@
  * Maps physical pins to panic IDs. danger_level is the GPIO level that
  * means the fault condition is present.
  *
- * Inputs use pull-down, so a disconnected/broken wire reads LOW.
- * danger_level = false → LOW = danger (fail-safe: wire break triggers fault).
+ * Inputs are opto-isolated. Opto drives GPIO HIGH when conducting, floats LOW when off.
+ * danger_level = false → LOW = danger (fail-safe: wire break → opto off → LOW → fault).
  * -------------------------------------------------------------------------- */
 
 typedef struct {
@@ -24,8 +25,7 @@ typedef struct {
 } gpio_input_t;
 
 static const gpio_input_t s_gpio_inputs[] = {
-    {SAFETY_ZONE_GPIO,  false, PANIC_ZONE_SENSOR},
-    {SAFETY_ESTOP_GPIO, false, PANIC_ESTOP_HMI},
+    {SAFETY_ESTOP_GPIO, true, PANIC_ESTOP_HMI},
 };
 #define NUM_GPIO_INPUTS  ((int)(sizeof(s_gpio_inputs) / sizeof(s_gpio_inputs[0])))
 
@@ -49,38 +49,25 @@ static bool           s_usb_faulted = false;  /* latched on USB drop, cleared on
 
 void safety_init(void)
 {
-    /* Safety inputs: pull-down, LOW = danger (fail-safe). */
-    for (int i = 0; i < NUM_GPIO_INPUTS; i++) {
+    /* Safety inputs + ack button: all opto-isolated DI channels.
+     * Opto output is open-collector: transistor pulls GPIO LOW when conducting.
+     * Pull-up holds GPIO HIGH when opto is off (wire break / open contact = danger). */
+    const int all_inputs[] = {
+        SAFETY_ZONE_GPIO, SAFETY_ESTOP_GPIO, SAFETY_ACK_GPIO,
+    };
+    for (int i = 0; i < (int)(sizeof(all_inputs) / sizeof(all_inputs[0])); i++) {
         gpio_config_t cfg = {
-            .pin_bit_mask  = (1ULL << s_gpio_inputs[i].gpio),
+            .pin_bit_mask  = (1ULL << all_inputs[i]),
             .mode          = GPIO_MODE_INPUT,
-            .pull_up_en    = GPIO_PULLUP_DISABLE,
-            .pull_down_en  = GPIO_PULLDOWN_ENABLE,
+            .pull_up_en    = GPIO_PULLUP_ENABLE,
+            .pull_down_en  = GPIO_PULLDOWN_DISABLE,
             .intr_type     = GPIO_INTR_DISABLE,
         };
         gpio_config(&cfg);
     }
 
-    /* Ack button: active low, pull-up. The only path out of PANIC/CLEAR. */
-    gpio_config_t ack_cfg = {
-        .pin_bit_mask  = (1ULL << SAFETY_ACK_GPIO),
-        .mode          = GPIO_MODE_INPUT,
-        .pull_up_en    = GPIO_PULLUP_ENABLE,
-        .pull_down_en  = GPIO_PULLDOWN_DISABLE,
-        .intr_type     = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&ack_cfg);
-
-    /* Safety output: driven LOW until the state machine reaches OK. */
-    gpio_config_t out_cfg = {
-        .pin_bit_mask  = (1ULL << SAFETY_OUTPUT_GPIO),
-        .mode          = GPIO_MODE_OUTPUT,
-        .pull_up_en    = GPIO_PULLUP_DISABLE,
-        .pull_down_en  = GPIO_PULLDOWN_DISABLE,
-        .intr_type     = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&out_cfg);
-    gpio_set_level(SAFETY_OUTPUT_GPIO, 0);
+    /* Safety relay outputs via TCA9554 — all de-energised until state machine reaches OK. */
+    relay_init();
 }
 
 /* --------------------------------------------------------------------------
@@ -89,11 +76,13 @@ void safety_init(void)
 
 safety_state_t safety_update(bool usb_connected)
 {
-    /* Drive safety output — reflects state from the previous tick.
+    /* Drive safety relay outputs — reflects state from the previous tick.
      * Writing here means hardware changes before any USB send this loop. */
-    gpio_set_level(SAFETY_OUTPUT_GPIO, (s_state == SAFETY_OK) ? 1 : 0);
+    bool safe = (s_state == SAFETY_OK);
+    relay_set(RELAY_CONTACTOR,    safe);
+    relay_set(RELAY_MOTOR_ENABLE, safe);
 
-    /* Read ack button. Active low — GPIO low = button pressed. */
+    /* Read ack button. Opto-isolated NO contact — opto on pulls GPIO LOW = pressed. */
     bool ack_pressed = (gpio_get_level(SAFETY_ACK_GPIO) == 0);
 
     /* Scan GPIO inputs. Pulses shorter than GLITCH_THRESHOLD are discarded.

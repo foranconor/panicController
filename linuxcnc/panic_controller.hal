@@ -9,7 +9,7 @@
 #     (operator only needs to press cycle start to resume)
 
 # Load the component — -Wn specifies the HAL component name to wait for
-loadusr -Wn panic-controller python3 /home/conor/linuxcnc/configs/sim.axis/panic_controller.py
+loadusr -Wn panic-controller python3 /home/conor/linuxcnc/configs/myCoolMachine/panic_controller.py
 
 # Drive LinuxCNC's external estop input from the controller state.
 # When estop-ok is LOW, LinuxCNC stays in estop regardless of F1.

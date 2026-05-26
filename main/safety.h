@@ -4,20 +4,21 @@
 #include <stdint.h>
 
 /* --------------------------------------------------------------------------
- * GPIO assignments
+ * GPIO assignments — Waveshare ESP32-S3-POE-ETH-8DI-8RO
  *
- * Safety inputs: pull-down, LOW = danger (fail-safe).
- * Wire break → 0 V → FAULT. Hold HIGH (3.3 V) to assert safe.
+ * Safety inputs are opto-isolated with open-collector output and internal pull-up.
+ * Opto on (circuit active) pulls GPIO LOW. Opto off → pull-up holds GPIO HIGH.
+ * danger_level = true: HIGH = danger (fail-safe: wire break → opto off → HIGH → fault).
  *
- * SAFETY_ZONE_GPIO  (4): exclusion zone presence sensor — HIGH = clear, LOW = person detected.
- * SAFETY_ESTOP_GPIO (5): HMI panel e-stop             — HIGH = released, LOW = pressed or wire fault.
- * SAFETY_ACK_GPIO   (0): operator acknowledge button  — active low, pull-up.
- *                        Currently the ESP32 BOOT button (PoC proxy).
+ * SAFETY_ZONE_GPIO  (4)  DI1: exclusion zone sensor — LOW = clear, HIGH = person/wire fault.
+ * SAFETY_ESTOP_GPIO (5)  DI2: HMI panel e-stop (NC) — LOW = released, HIGH = pressed or wire fault.
+ * SAFETY_ACK_GPIO   (6)  DI3: operator ack (NO)     — LOW = pressed (opto on), HIGH = released.
+ *
+ * Safety outputs are relay contacts driven via TCA9554 I2C expander (relay.h).
  * -------------------------------------------------------------------------- */
 #define SAFETY_ZONE_GPIO    4
 #define SAFETY_ESTOP_GPIO   5
-#define SAFETY_ACK_GPIO     0
-#define SAFETY_OUTPUT_GPIO  9   /* HIGH = safe (OK), LOW = fault/not ready */
+#define SAFETY_ACK_GPIO     6
 
 /* Timing constants shared across safety, LED, and heartbeat logic */
 #define LOOP_PERIOD_MS       10   /* main loop tick period                          */

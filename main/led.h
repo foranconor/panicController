@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define LED_GPIO 48
+#define LED_GPIO 38
 
 /* Heartbeat flash period — must match HEARTBEAT_INTERVAL in main.c */
 #define HEARTBEAT_INTERVAL  200              /* 200 × 10 ms = 2 s */

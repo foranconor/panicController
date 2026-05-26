@@ -113,7 +113,7 @@ void led_init(void) {
 void led_set_grb(uint8_t g, uint8_t r, uint8_t b) {
   if (!s_chan || !s_encoder)
     return;
-  uint8_t buf[3] = {g, r, b};
+  uint8_t buf[3] = {r, g, b};
   rmt_transmit_config_t tx_cfg = {.loop_count = 0};
   rmt_transmit(s_chan, s_encoder, buf, sizeof(buf), &tx_cfg);
   rmt_tx_wait_all_done(s_chan, 10);

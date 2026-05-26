@@ -3,12 +3,15 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "driver/gpio.h"
 #include "led.h"
 #include "panics.h"
+#include "relay.h"
 #include "safety.h"
 #include "telemetry.h"
 #include "usb_serial.h"
 
+#include <stdio.h>
 #include <string.h>
 
 static const char *state_name(safety_state_t s) {
@@ -120,6 +123,7 @@ void app_main(void) {
     if (usb_changed) {
       if (usb) {
         telemetry_event(uptime_s, "usb", "LinuxCNC connection established.");
+        relay_scan_i2c(uptime_s);
       } else {
         telemetry_event(uptime_s, "usb",
                         "LinuxCNC connection lost. Machine stopped.");
@@ -153,6 +157,12 @@ void app_main(void) {
       telemetry_heartbeat(uptime_s, (int)safety, usb, avg_us,
                           loop_max_us, loop_overruns, glitches);
       send_status(safety, &hb_prev);
+
+      char dbg[64];
+      snprintf(dbg, sizeof(dbg), "GPIO raw: estop=%d ack=%d",
+               gpio_get_level(SAFETY_ESTOP_GPIO),
+               gpio_get_level(SAFETY_ACK_GPIO));
+      telemetry_event(uptime_s, "debug", dbg);
 
       loop_sum_us = 0;
       loop_max_us = 0;
