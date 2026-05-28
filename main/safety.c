@@ -198,6 +198,13 @@ safety_state_t safety_update(bool usb_connected)
     if (s_state == SAFETY_OK) {
         s_wd       = WD_IDLE;
         s_wd_count = 0;
+    } else if (s_wd == WD_CONTACTOR && ack_pressed && !gpio_triggered) {
+        /* Physical re-arm: operator pressed ack with no active faults.
+         * Re-energises the contactor so drives power up and EtherCAT reconnects.
+         * Safety state remains PANIC — USB must still connect and the full ack
+         * sequence must complete before motion is re-enabled. */
+        s_wd       = WD_IDLE;
+        s_wd_count = 0;
     } else if (wd_entering_panic && s_wd == WD_IDLE) {
         s_wd       = WD_MONITORING;
         s_wd_count = 0;

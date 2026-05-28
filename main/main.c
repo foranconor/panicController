@@ -134,6 +134,9 @@ void app_main(void) {
                         "T2 expired — motor not stopped. Contactor tripped. Operator reset required.");
       } else if (wd == WD_IDLE && prev_wd == WD_MONITORING) {
         telemetry_event(uptime_s, "watchdog", "Zero speed confirmed — no escalation needed.");
+      } else if (wd == WD_IDLE && prev_wd == WD_CONTACTOR) {
+        telemetry_event(uptime_s, "watchdog",
+                        "Contactor re-armed by operator. Connect LinuxCNC then ack to resume.");
       }
       prev_wd = wd;
     }
