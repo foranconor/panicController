@@ -8,6 +8,10 @@
 #define CALM_SWEEP_LOOPS        (CALM_SWEEP_MS       / LOOP_PERIOD_MS)
 #define CLEAR_SETTLE_LOOPS      (CLEAR_SETTLE_MS     / LOOP_PERIOD_MS)
 
+/* Watchdog escalation timeouts */
+#define WD_T1_LOOPS  (2000 / LOOP_PERIOD_MS)   /* T1: 2 s — escalate to HW estop  */
+#define WD_T2_LOOPS  (4000 / LOOP_PERIOD_MS)   /* T2: 4 s — escalate to contactor */
+
 /* --------------------------------------------------------------------------
  * GPIO wiring manifest
  *
@@ -36,12 +40,17 @@ static uint32_t s_consec[NUM_GPIO_INPUTS];
  * State
  * -------------------------------------------------------------------------- */
 
-static safety_state_t s_state       = SAFETY_PANIC;
-static uint32_t       s_glitches    = 0;
-static uint32_t       s_calm_count  = 0;
+static safety_state_t s_state        = SAFETY_PANIC;
+static uint32_t       s_glitches     = 0;
+static uint32_t       s_calm_count   = 0;
 static uint32_t       s_settle_count = 0;
-static bool           s_prev_usb    = false;
-static bool           s_usb_faulted = false;  /* latched on USB drop, cleared on reconnect */
+static bool           s_prev_usb     = false;
+static bool           s_usb_faulted  = false;  /* latched on USB drop, cleared on reconnect */
+
+/* Watchdog state */
+static wd_state_t     s_wd           = WD_IDLE;
+static uint32_t       s_wd_count     = 0;
+static safety_state_t s_wd_prev      = SAFETY_OK;  /* for detecting PANIC entry transitions */
 
 /* --------------------------------------------------------------------------
  * Init
@@ -54,6 +63,7 @@ void safety_init(void)
      * Pull-up holds GPIO HIGH when opto is off (wire break / open contact = danger). */
     const int all_inputs[] = {
         SAFETY_ZONE_GPIO, SAFETY_ESTOP_GPIO, SAFETY_ACK_GPIO,
+        SAFETY_ZERO_SPEED_GPIO,
     };
     for (int i = 0; i < (int)(sizeof(all_inputs) / sizeof(all_inputs[0])); i++) {
         gpio_config_t cfg = {
@@ -76,11 +86,8 @@ void safety_init(void)
 
 safety_state_t safety_update(bool usb_connected)
 {
-    /* Drive safety relay outputs — reflects state from the previous tick.
-     * Writing here means hardware changes before any USB send this loop. */
-    bool safe = (s_state == SAFETY_OK);
-    relay_set(RELAY_CONTACTOR,    safe);
-    relay_set(RELAY_MOTOR_ENABLE, safe);
+    /* Zero speed feedback — NPN open-collector, active low. */
+    bool zero_speed = (gpio_get_level(SAFETY_ZERO_SPEED_GPIO) == 0);
 
     /* Read ack button. Opto-isolated NO contact — opto on pulls GPIO LOW = pressed. */
     bool ack_pressed = (gpio_get_level(SAFETY_ACK_GPIO) == 0);
@@ -178,8 +185,58 @@ safety_state_t safety_update(bool usb_connected)
         s_state = SAFETY_PANIC;
     }
 
+    /* ------------------------------------------------------------------
+     * Watchdog escalation.
+     *
+     * On panic entry: start monitoring zero speed (T1 window).
+     * If zero speed is not seen within T1: de-energise HW estop (RO2).
+     * If zero speed is not seen within T2: de-energise contactor (RO1).
+     * Escalation latches until the operator acks through to SAFETY_OK.
+     * ------------------------------------------------------------------ */
+    bool wd_entering_panic = (s_state == SAFETY_PANIC && s_wd_prev != SAFETY_PANIC);
+
+    if (s_state == SAFETY_OK) {
+        s_wd       = WD_IDLE;
+        s_wd_count = 0;
+    } else if (wd_entering_panic && s_wd == WD_IDLE) {
+        s_wd       = WD_MONITORING;
+        s_wd_count = 0;
+    } else if (s_state == SAFETY_PANIC && s_wd == WD_MONITORING) {
+        if (zero_speed) {
+            /* Motor stopped by LinuxCNC/CiA 402 — no escalation needed */
+            s_wd       = WD_IDLE;
+            s_wd_count = 0;
+        } else {
+            s_wd_count++;
+            if (s_wd_count >= WD_T1_LOOPS) {
+                s_wd       = WD_HW_ESTOP;
+                s_wd_count = 0;
+            }
+        }
+    } else if (s_state == SAFETY_PANIC && s_wd == WD_HW_ESTOP) {
+        if (!zero_speed) {
+            s_wd_count++;
+            if (s_wd_count >= WD_T2_LOOPS) {
+                s_wd = WD_CONTACTOR;
+            }
+        }
+        /* zero_speed seen: motor stopped by HW estop — hold until ack */
+    }
+    /* WD_CONTACTOR: hold until safety reaches OK */
+
+    s_wd_prev = s_state;
+
+    /* Relay outputs — driven by watchdog escalation level.
+     * WD_IDLE/WD_MONITORING: both relays energised (normal or CiA 402 stopping).
+     * WD_HW_ESTOP:           RO2 de-energised, RO1 stays.
+     * WD_CONTACTOR:          both de-energised (latched). */
+    relay_set(RELAY_CONTACTOR, s_wd < WD_CONTACTOR);
+    relay_set(RELAY_HW_ESTOP,  s_wd < WD_HW_ESTOP);
+
     return s_state;
 }
+
+wd_state_t safety_wd_state(void) { return s_wd; }
 
 /* --------------------------------------------------------------------------
  * Force a software estop (LinuxCNC sent ESTOP over USB)

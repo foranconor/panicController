@@ -41,26 +41,13 @@ void relay_init(void)
     };
     ESP_ERROR_CHECK(i2c_new_master_bus(&bus_cfg, &s_bus));
 
-    /* Probe to confirm the TCA9554 is present and responding */
-    esp_err_t probe = i2c_master_probe(s_bus, TCA9554_ADDR, 50);
-    if (probe != ESP_OK) {
-        ESP_LOGE(TAG, "TCA9554 not found at 0x%02X: %s", TCA9554_ADDR, esp_err_to_name(probe));
-        /* Scan 0x00–0x7F and log any device that responds */
-        for (uint8_t addr = 0x08; addr < 0x78; addr++) {
-            if (i2c_master_probe(s_bus, addr, 10) == ESP_OK) {
-                ESP_LOGI(TAG, "  found device at 0x%02X", addr);
-            }
-        }
-        ESP_ERROR_CHECK(probe);  /* abort — relays are safety-critical */
-    }
-    ESP_LOGI(TAG, "TCA9554 found at 0x%02X", TCA9554_ADDR);
-
     i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address  = TCA9554_ADDR,
         .scl_speed_hz    = I2C_FREQ_HZ,
     };
     ESP_ERROR_CHECK(i2c_master_bus_add_device(s_bus, &dev_cfg, &s_dev));
+    ESP_LOGI(TAG, "TCA9554 configured at 0x%02X", TCA9554_ADDR);
 
     /* Set all pins as outputs (config register: 0 = output) */
     uint8_t config_buf[2] = { TCA9554_REG_CONFIG, 0x00 };
@@ -88,12 +75,5 @@ void relay_set(relay_id_t id, bool on)
 
 void relay_scan_i2c(uint32_t uptime_s)
 {
-    char msg[32];
-    for (uint8_t addr = 0x08; addr < 0x78; addr++) {
-        if (i2c_master_probe(s_bus, addr, 10) == ESP_OK) {
-            snprintf(msg, sizeof(msg), "I2C device at 0x%02X", addr);
-            telemetry_event(uptime_s, "i2c_scan", msg);
-        }
-    }
-    telemetry_event(uptime_s, "i2c_scan", "scan complete");
+    telemetry_event(uptime_s, "i2c_scan", "TCA9554 relay expander active");
 }

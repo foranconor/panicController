@@ -4,6 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
+#include "buzzer.h"
 #include "led.h"
 #include "panics.h"
 #include "relay.h"
@@ -13,6 +14,8 @@
 
 #include <stdio.h>
 #include <string.h>
+
+#define DEBUG_SERVO_ENABLE_GPIO 15  /* DI5 — motor driver servo enable signal */
 
 static const char *state_name(safety_state_t s) {
   if (s == SAFETY_PANIC) {
@@ -29,13 +32,13 @@ static const char *state_name(safety_state_t s) {
 }
 
 static void send_status(safety_state_t state, safety_state_t *prev) {
-  if (state == SAFETY_OK) {
-    bool state_just_changed = (state != *prev);
-    if (state_just_changed) {
+  bool state_just_changed = (state != *prev);
+  if (state_just_changed) {
+    if (state == SAFETY_OK) {
       usb_serial_send("OK\n");
+    } else if (state == SAFETY_PANIC) {
+      usb_serial_send("PANIC\n");
     }
-  } else {
-    usb_serial_send("PANIC\n");
   }
   *prev = state;
 }
@@ -43,7 +46,15 @@ static void send_status(safety_state_t state, safety_state_t *prev) {
 void app_main(void) {
   safety_init();
   led_init();
+  buzzer_init();
   usb_serial_init();
+
+  gpio_config_t dbg_cfg = {
+      .pin_bit_mask = (1ULL << DEBUG_SERVO_ENABLE_GPIO),
+      .mode         = GPIO_MODE_INPUT,
+      .pull_up_en   = GPIO_PULLUP_ENABLE,
+  };
+  gpio_config(&dbg_cfg);
 
   uint32_t uptime_s = 0;
   telemetry_event(uptime_s, "system",
@@ -53,6 +64,7 @@ void app_main(void) {
   safety_state_t prev_safety = SAFETY_PANIC;
   bool prev_usb = false;
   safety_state_t hb_prev = SAFETY_PANIC;
+  wd_state_t prev_wd = WD_IDLE;
 
   uint32_t tick = 0;
   int loop_count = 0;
@@ -109,9 +121,27 @@ void app_main(void) {
 
     /* Drain faults that became active or cleared this tick. Both run every
      * tick so events while already in PANIC are never silently dropped. */
+    /* Log watchdog escalation transitions */
+    wd_state_t wd = safety_wd_state();
+    if (wd != prev_wd) {
+      if (wd == WD_MONITORING) {
+        telemetry_event(uptime_s, "watchdog", "Panic: monitoring zero speed (T1=2s).");
+      } else if (wd == WD_HW_ESTOP) {
+        telemetry_event(uptime_s, "watchdog",
+                        "T1 expired — motor not stopped. HW estop triggered (T2=4s).");
+      } else if (wd == WD_CONTACTOR) {
+        telemetry_event(uptime_s, "watchdog",
+                        "T2 expired — motor not stopped. Contactor tripped. Operator reset required.");
+      } else if (wd == WD_IDLE && prev_wd == WD_MONITORING) {
+        telemetry_event(uptime_s, "watchdog", "Zero speed confirmed — no escalation needed.");
+      }
+      prev_wd = wd;
+    }
+
     const panic_entry_t *new_panic;
     while ((new_panic = panic_consume_new()) != NULL) {
       telemetry_panic(uptime_s, new_panic, from_state);
+      buzzer_beep();
     }
 
     const panic_entry_t *cleared_panic;
@@ -131,7 +161,8 @@ void app_main(void) {
       prev_usb = usb;
     }
 
-    /* 3. LED */
+    /* 3. Buzzer and LED */
+    buzzer_update();
     led_update_state(safety, usb, tick);
 
     /* 4. Heartbeat — accumulate loop timing, emit every 2 s */
@@ -158,10 +189,12 @@ void app_main(void) {
                           loop_max_us, loop_overruns, glitches);
       send_status(safety, &hb_prev);
 
-      char dbg[64];
-      snprintf(dbg, sizeof(dbg), "GPIO raw: estop=%d ack=%d",
+      char dbg[80];
+      snprintf(dbg, sizeof(dbg), "GPIO raw: estop=%d ack=%d zero_speed=%d servo_en=%d",
                gpio_get_level(SAFETY_ESTOP_GPIO),
-               gpio_get_level(SAFETY_ACK_GPIO));
+               gpio_get_level(SAFETY_ACK_GPIO),
+               gpio_get_level(SAFETY_ZERO_SPEED_GPIO),
+               gpio_get_level(DEBUG_SERVO_ENABLE_GPIO));
       telemetry_event(uptime_s, "debug", dbg);
 
       loop_sum_us = 0;

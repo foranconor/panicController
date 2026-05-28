@@ -16,9 +16,11 @@
  *
  * Safety outputs are relay contacts driven via TCA9554 I2C expander (relay.h).
  * -------------------------------------------------------------------------- */
-#define SAFETY_ZONE_GPIO    4
-#define SAFETY_ESTOP_GPIO   5
-#define SAFETY_ACK_GPIO     6
+#define SAFETY_ZONE_GPIO        4
+#define SAFETY_ESTOP_GPIO       5
+#define SAFETY_ACK_GPIO         6
+#define SAFETY_24V_GPIO         18  /* DI8 — 24V PSU presence (HIGH = absent = fault) */
+#define SAFETY_ZERO_SPEED_GPIO  7   /* DI4 — motor driver zero speed (NPN, LOW = stopped) */
 
 /* Timing constants shared across safety, LED, and heartbeat logic */
 #define LOOP_PERIOD_MS       10   /* main loop tick period                          */
@@ -33,9 +35,18 @@ typedef enum {
     SAFETY_OK    = 3,  /* stable and clear — machine may run      */
 } safety_state_t;
 
+/* Watchdog escalation level — advances when motor doesn't stop after a panic */
+typedef enum {
+    WD_IDLE       = 0,  /* no panic active, or motor confirmed stopped before T1  */
+    WD_MONITORING = 1,  /* panic active, counting T1, waiting for zero speed       */
+    WD_HW_ESTOP   = 2,  /* T1 expired — HW estop triggered, counting T2           */
+    WD_CONTACTOR  = 3,  /* T2 expired — contactor tripped, latched until OK       */
+} wd_state_t;
+
 void            safety_init(void);
 safety_state_t  safety_update(bool usb_connected);
 void            safety_force_estop(void);
+wd_state_t      safety_wd_state(void);
 uint32_t        safety_calm_progress(void);    /* 0..CALM_SWEEP_LOOPS, for LED sweep    */
 uint32_t        safety_settle_progress(void);  /* 0..CLEAR_SETTLE_LOOPS, for LED sweep  */
 uint32_t        safety_get_and_reset_glitches(void);

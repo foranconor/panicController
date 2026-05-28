@@ -18,9 +18,9 @@ static panic_entry_t s_panics[PANIC_COUNT] = {
         {
             .title = "E-stop pressed at panel",
             .source_type = "GPIO",
-            .source_id = "GPIO5",
+            .source_id = "DI2",
             .explanation =
-                "The panel e-stop on GPIO5 was activated. This could be a "
+                "The panel e-stop on DI2 was activated. This could be a "
                 "deliberate emergency stop, a button left pressed, or a wiring "
                 "fault.",
             .fix = "1. Find out why it was pressed before resetting - someone "
@@ -28,7 +28,7 @@ static panic_entry_t s_panics[PANIC_COUNT] = {
                    "2. Release the e-stop button (twist-and-turn or key-reset "
                    "depending on your button).\n"
                    "3. If the button is already released, check the wiring on "
-                   "GPIO5 for a break or loose terminal.\n"
+                   "DI2 for a break or loose terminal.\n"
                    "4. Once the button is out and the circuit is healthy, "
                    "press the ack button to resume.",
             .color = {255, 165, 0},
@@ -39,19 +39,37 @@ static panic_entry_t s_panics[PANIC_COUNT] = {
         {
             .title = "Zone sensor triggered - person detected",
             .source_type = "GPIO",
-            .source_id = "GPIO4",
+            .source_id = "DI1",
             .explanation =
-                "The exclusion zone sensor on GPIO4 is active. Something is in "
+                "The exclusion zone sensor on DI1 is active. Something is in "
                 "the machine's work area that shouldn't be. The machine is "
                 "stopped.",
             .fix = "1. Make sure the exclusion zone is completely clear.\n"
                    "2. If the zone is clear but the sensor is still active, "
                    "check its indicator light - it may be misaligned or failing.\n"
-                   "3. Inspect the wiring on GPIO4 for damage or a loose "
+                   "3. Inspect the wiring on DI1 for damage or a loose "
                    "connector.\n"
                    "4. Once the zone is clear and the sensor reads normal, "
                    "press the ack button to resume.",
             .color = {255, 255, 0},
+            .active = false,
+        },
+
+    [PANIC_24V_LOST] =
+        {
+            .title = "24V supply lost",
+            .source_type = "GPIO",
+            .source_id = "DI8",
+            .explanation =
+                "The 24V PSU supply is absent or below threshold. Safety "
+                "outputs and drive I/O are unpowered. The machine cannot "
+                "run safely without it.",
+            .fix = "1. Check the 24V PSU is switched on and its indicator "
+                   "is lit.\n"
+                   "2. Check the supply wiring and terminals on DI8 for a "
+                   "loose or broken connection.\n"
+                   "3. Once 24V is restored, press the ack button to resume.",
+            .color = {0, 100, 255},  /* blue — power fault */
             .active = false,
         },
 

@@ -7,8 +7,8 @@
  * Relay de-energised by default — fail-safe on power-up or I2C fault. */
 
 typedef enum {
-    RELAY_CONTACTOR    = 0,  /* RO1 — power contactor upstream of motor drivers */
-    RELAY_MOTOR_ENABLE = 1,  /* RO2 — motor driver enable input                 */
+    RELAY_CONTACTOR = 0,  /* RO1 — power contactor upstream of motor drivers */
+    RELAY_HW_ESTOP  = 1,  /* RO2 — hardware estop input on motor driver       */
 } relay_id_t;
 
 void relay_init(void);

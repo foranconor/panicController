@@ -18,8 +18,9 @@
 typedef enum {
     PANIC_ESTOP_HMI    = 0,  /* physical e-stop button at operator panel */
     PANIC_ZONE_SENSOR  = 1,  /* exclusion zone presence sensor           */
-    PANIC_USB_LOST     = 2,  /* USB link to LinuxCNC dropped             */
-    PANIC_SW_ESTOP     = 3,  /* software estop command from LinuxCNC     */
+    PANIC_24V_LOST     = 2,  /* 24V PSU supply absent                    */
+    PANIC_USB_LOST     = 3,  /* USB link to LinuxCNC dropped             */
+    PANIC_SW_ESTOP     = 4,  /* software estop command from LinuxCNC     */
     PANIC_COUNT,
 } panic_id_t;
 
